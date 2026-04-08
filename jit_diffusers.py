@@ -129,12 +129,14 @@ class JiTDiffusersModel(ModelMixin, ConfigMixin):
 
     def to_jit_checkpoint(
         self,
-        include_ema: bool = True,
+        ema_mode: Literal["none", "copy_to_both"] = "copy_to_both",
         prefix: str = "net.",
     ) -> Dict[str, object]:
         base_state = {f"{prefix}{k}": v.detach().cpu() for k, v in self.net.state_dict().items()}
         checkpoint = {"model": base_state}
-        if include_ema:
+        if ema_mode == "copy_to_both":
             checkpoint["model_ema1"] = {k: v.clone() for k, v in base_state.items()}
             checkpoint["model_ema2"] = {k: v.clone() for k, v in base_state.items()}
+        elif ema_mode != "none":
+            raise ValueError(f"Unsupported ema_mode='{ema_mode}'.")
         return checkpoint

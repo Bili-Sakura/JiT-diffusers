@@ -47,6 +47,13 @@ def main():
                 "source_checkpoint": metadata["checkpoint_path"],
                 "weights": metadata["weights"],
                 "epoch": metadata["epoch"],
+                "jit_args": {
+                    "model": model.config.model_name,
+                    "img_size": model.config.image_size,
+                    "class_num": model.config.num_classes,
+                    "attn_dropout": model.config.attn_dropout,
+                    "proj_dropout": model.config.proj_dropout,
+                },
             },
             f,
             indent=2,

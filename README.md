@@ -157,7 +157,8 @@ Convert a diffusers model back to JiT checkpoint format:
 ```
 python scripts/convert_diffusers_to_jit.py \
   --model_path ${OUTPUT_DIR}/jit-diffusers \
-  --output_path ${OUTPUT_DIR}/checkpoint-converted.pth
+  --output_path ${OUTPUT_DIR}/checkpoint-converted.pth \
+  --ema_mode copy_to_both
 ```
 
 ### Acknowledgements
