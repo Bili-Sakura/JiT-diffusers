@@ -140,6 +140,27 @@ to evaluate FID and IS against a reference image folder or statistics. You can u
 to prepare the reference image folder, or directly use our pre-computed reference stats
 under ```fid_stats```.
 
+### Diffusers integration and checkpoint conversion
+
+This repo now includes a diffusers-compatible model wrapper (`JiTDiffusersModel`) and conversion scripts.
+
+Convert a JiT training checkpoint to diffusers format:
+```
+python scripts/convert_jit_to_diffusers.py \
+  --checkpoint_path ${CKPT_DIR}/checkpoint-last.pth \
+  --output_dir ${OUTPUT_DIR}/jit-diffusers \
+  --weights ema1 \
+  --safe_serialization
+```
+
+Convert a diffusers model back to JiT checkpoint format:
+```
+python scripts/convert_diffusers_to_jit.py \
+  --model_path ${OUTPUT_DIR}/jit-diffusers \
+  --output_path ${OUTPUT_DIR}/checkpoint-converted.pth \
+  --ema_mode copy_to_both
+```
+
 ### Acknowledgements
 
 We thank Google TPU Research Cloud (TRC) for granting us access to TPUs, and the MIT
