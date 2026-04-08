@@ -78,10 +78,13 @@ class JiTDiffusersModel(ModelMixin, ConfigMixin):
         )
 
     def forward(self, sample: torch.Tensor, timestep: torch.Tensor, class_labels: torch.Tensor, return_dict: bool = True):
+        timestep = torch.as_tensor(timestep, device=sample.device)
         if timestep.ndim == 0:
-            timestep = timestep[None].expand(sample.shape[0])
-        elif timestep.ndim > 1:
+            timestep = timestep.repeat(sample.shape[0])
+        else:
             timestep = timestep.reshape(-1)
+            if timestep.shape[0] == 1 and sample.shape[0] > 1:
+                timestep = timestep.repeat(sample.shape[0])
 
         denoised = self.net(sample, timestep, class_labels)
         if not return_dict:

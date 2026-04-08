@@ -39,7 +39,9 @@ def main():
         proj_dropout=model.config.proj_dropout,
     )
 
-    os.makedirs(os.path.dirname(os.path.abspath(args.output_path)), exist_ok=True)
+    output_dir = os.path.dirname(os.path.abspath(args.output_path))
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     torch.save(checkpoint, args.output_path)
     print(f"Saved JiT checkpoint to: {args.output_path}")
 
