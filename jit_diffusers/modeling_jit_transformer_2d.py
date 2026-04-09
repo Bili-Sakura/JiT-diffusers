@@ -55,7 +55,7 @@ class JiTCheckpointConfig:
 
 def _config_from_checkpoint(ckpt_args: argparse.Namespace | Mapping[str, Any]) -> JiTCheckpointConfig:
     if isinstance(ckpt_args, argparse.Namespace):
-        args_dict: Mapping[str, Any] = vars(ckpt_args)
+        args_dict = vars(ckpt_args)
     elif isinstance(ckpt_args, Mapping):
         args_dict = ckpt_args
     else:

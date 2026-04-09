@@ -37,9 +37,7 @@ class JiTPipeline(DiffusionPipeline):
             return_dict=return_dict,
         )
         if not return_dict:
-            if isinstance(output, tuple):
-                return output
-            return (output.sample,)
+            return output if isinstance(output, tuple) else (output.sample,)
         if isinstance(output, tuple):
             return JiTPipelineOutput(images=output[0])
         return JiTPipelineOutput(images=output.sample)
