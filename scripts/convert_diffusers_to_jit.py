@@ -68,23 +68,23 @@ def main():
             raise ValueError(f"Missing required config fields: {keys}")
         return default
 
-    model_type = _first_present(source_args, "model", "model_name", "model_type")
+    model_type = _first_present(source_args, "model_type", "model_name", "model")
     if model_type is None:
         model_type = _config_first("model_type", "model_name", required=True)
 
-    sample_size = _first_present(source_args, "img_size", "image_size", "sample_size")
+    sample_size = _first_present(source_args, "sample_size", "image_size", "img_size")
     if sample_size is None:
         sample_size = _config_first("sample_size", "image_size", required=True)
 
-    num_class_embeds = _first_present(source_args, "class_num", "num_classes", "num_class_embeds")
+    num_class_embeds = _first_present(source_args, "num_class_embeds", "num_classes", "class_num")
     if num_class_embeds is None:
         num_class_embeds = _config_first("num_class_embeds", "num_classes", required=True)
 
-    attention_dropout = _first_present(source_args, "attn_dropout", "attention_dropout")
+    attention_dropout = _first_present(source_args, "attention_dropout", "attn_dropout")
     if attention_dropout is None:
         attention_dropout = _config_first("attention_dropout", "attn_dropout", default=0.0)
 
-    dropout = _first_present(source_args, "proj_dropout", "dropout")
+    dropout = _first_present(source_args, "dropout", "proj_dropout")
     if dropout is None:
         dropout = _config_first("dropout", "proj_dropout", default=0.0)
 

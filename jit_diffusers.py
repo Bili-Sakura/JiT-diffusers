@@ -32,6 +32,7 @@ def _build_jit_kwargs(
     proj_dropout: float,
     model_name: str | None = None,
 ) -> Dict[str, object]:
+    # Keep model_name for backward-compatible internal call signatures.
     _ = model_name
     return {
         "input_size": image_size,
