@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Dict, Literal, Mapping, Tuple
+from typing import Any, Dict, Literal, Tuple
 
 import torch
 from diffusers import ConfigMixin, ModelMixin
