@@ -10,7 +10,7 @@ from diffusers import ConfigMixin, ModelMixin
 from diffusers.configuration_utils import register_to_config
 from diffusers.models.modeling_outputs import Transformer2DModelOutput
 
-from model_jit import JiT_models
+from .modeling_jit_backbone import JiT_models
 
 
 def _extract_module_state_dict(
