@@ -30,7 +30,12 @@ class JiTPipeline(DiffusionPipeline):
         class_labels: torch.Tensor,
         return_dict: bool = True,
     ) -> JiTPipelineOutput | Tuple[torch.Tensor]:
-        output = self.transformer(sample=sample, timestep=timestep, class_labels=class_labels, return_dict=True)
+        output = self.transformer(
+            sample=sample,
+            timestep=timestep,
+            class_labels=class_labels,
+            return_dict=return_dict,
+        )
         if not return_dict:
-            return (output.sample,)
+            return output
         return JiTPipelineOutput(images=output.sample)
