@@ -142,7 +142,10 @@ under ```fid_stats```.
 
 ### Diffusers integration and checkpoint conversion
 
-This repo now includes a diffusers-compatible model wrapper (`JiTDiffusersModel`) and conversion scripts.
+This repo now includes a self-contained diffusers-style package:
+- model: `JiTTransformer2DModel` (legacy alias: `JiTDiffusersModel`)
+- pipeline: `JiTPipeline`
+- package layout under `jit_diffusers/` (modeling + pipeline modules)
 
 Convert a JiT training checkpoint to diffusers format:
 ```

@@ -15,10 +15,7 @@ from model_jit import JiT_models
 def _extract_module_state_dict(
     state_dict: Dict[str, torch.Tensor], prefixes: Tuple[str, ...] = ("transformer.", "net.")
 ) -> Dict[str, torch.Tensor]:
-    """Extract a module state dict by stripping the first fully-matching prefix.
-
-    Prefix precedence is left-to-right; `"transformer."` is preferred over legacy `"net."`.
-    """
+    """Extract module state by stripping the first fully-matching prefix."""
     for prefix in prefixes:
         if all(key.startswith(prefix) for key in state_dict.keys()):
             return {k[len(prefix):]: v for k, v in state_dict.items()}
@@ -30,10 +27,7 @@ def _build_jit_kwargs(
     num_classes: int,
     attn_dropout: float,
     proj_dropout: float,
-    model_name: str | None = None,
 ) -> Dict[str, object]:
-    # Keep model_name for backward-compatible internal call signatures.
-    _ = model_name
     return {
         "input_size": image_size,
         "in_channels": 3,
@@ -66,9 +60,9 @@ def _config_from_checkpoint(ckpt_args: argparse.Namespace) -> JiTCheckpointConfi
                 return args_dict[key]
         return default
 
-    model_name = _get_first_available("model", "model_name", "model_type")
-    image_size = _get_first_available("img_size", "image_size", "sample_size")
-    num_classes = _get_first_available("class_num", "num_classes", "num_class_embeds")
+    model_name = _get_first_available("model_type", "model_name", "model")
+    image_size = _get_first_available("sample_size", "image_size", "img_size")
+    num_classes = _get_first_available("num_class_embeds", "num_classes", "class_num")
     if model_name is None or image_size is None or num_classes is None:
         raise ValueError("Checkpoint args are missing model/image_size/num_classes information.")
 
@@ -76,39 +70,38 @@ def _config_from_checkpoint(ckpt_args: argparse.Namespace) -> JiTCheckpointConfi
         model_name=str(model_name),
         image_size=int(image_size),
         num_classes=int(num_classes),
-        attn_dropout=float(_get_first_available("attn_dropout", "attention_dropout", default=0.0)),
-        proj_dropout=float(_get_first_available("proj_dropout", "dropout", default=0.0)),
+        attn_dropout=float(_get_first_available("attention_dropout", "attn_dropout", default=0.0)),
+        proj_dropout=float(_get_first_available("dropout", "proj_dropout", default=0.0)),
     )
 
 
-class JiTDiffusersModel(ModelMixin, ConfigMixin):
+class JiTTransformer2DModel(ModelMixin, ConfigMixin):
     @register_to_config
     def __init__(
         self,
-        model_name: str = "JiT-B/16",
-        image_size: int = 256,
-        num_classes: int = 1000,
-        attn_dropout: float = 0.0,
-        proj_dropout: float = 0.0,
-        model_type: str | None = None,
-        sample_size: int | None = None,
-        num_class_embeds: int | None = None,
-        attention_dropout: float | None = None,
-        dropout: float | None = None,
+        model_type: str = "JiT-B/16",
+        sample_size: int = 256,
+        num_class_embeds: int = 1000,
+        attention_dropout: float = 0.0,
+        dropout: float = 0.0,
+        model_name: str | None = None,
+        image_size: int | None = None,
+        num_classes: int | None = None,
+        attn_dropout: float | None = None,
+        proj_dropout: float | None = None,
     ):
         super().__init__()
-        resolved_model_type = model_name if model_type is None else model_type
-        resolved_sample_size = image_size if sample_size is None else sample_size
-        resolved_num_class_embeds = num_classes if num_class_embeds is None else num_class_embeds
-        resolved_attention_dropout = attn_dropout if attention_dropout is None else attention_dropout
-        resolved_dropout = proj_dropout if dropout is None else dropout
+        resolved_model_type = model_type if model_name is None else model_name
+        resolved_sample_size = sample_size if image_size is None else image_size
+        resolved_num_class_embeds = num_class_embeds if num_classes is None else num_classes
+        resolved_attention_dropout = attention_dropout if attn_dropout is None else attn_dropout
+        resolved_dropout = dropout if proj_dropout is None else proj_dropout
 
         if resolved_model_type not in JiT_models:
             raise ValueError(f"Unknown model '{resolved_model_type}'. Available: {list(JiT_models.keys())}")
 
         self.transformer = JiT_models[resolved_model_type](
             **_build_jit_kwargs(
-                model_name=resolved_model_type,
                 image_size=resolved_sample_size,
                 num_classes=resolved_num_class_embeds,
                 attn_dropout=resolved_attention_dropout,
@@ -137,18 +130,13 @@ class JiTDiffusersModel(ModelMixin, ConfigMixin):
         weights: Literal["model", "ema1", "ema2"] = "ema1",
         map_location: str = "cpu",
         strict: bool = True,
-    ) -> Tuple["JiTDiffusersModel", Dict[str, object]]:
+    ) -> Tuple["JiTTransformer2DModel", Dict[str, object]]:
         checkpoint = torch.load(checkpoint_path, map_location=map_location)
         if "args" not in checkpoint:
             raise ValueError("Checkpoint is missing 'args', cannot infer JiT architecture config.")
 
         config = _config_from_checkpoint(checkpoint["args"])
         model = cls(
-            model_name=config.model_name,
-            image_size=config.image_size,
-            num_classes=config.num_classes,
-            attn_dropout=config.attn_dropout,
-            proj_dropout=config.proj_dropout,
             model_type=config.model_name,
             sample_size=config.image_size,
             num_class_embeds=config.num_classes,
@@ -192,3 +180,7 @@ class JiTDiffusersModel(ModelMixin, ConfigMixin):
     @net.setter
     def net(self, module):
         self.transformer = module
+
+
+# Backward-compatible alias.
+JiTDiffusersModel = JiTTransformer2DModel

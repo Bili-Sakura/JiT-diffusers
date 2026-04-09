@@ -4,8 +4,11 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-from jit_diffusers import JiTDiffusersModel
+try:
+    from jit_diffusers import JiTTransformer2DModel
+except ModuleNotFoundError:
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
+    from jit_diffusers import JiTTransformer2DModel
 
 
 def get_args():
@@ -30,7 +33,7 @@ def get_args():
 
 def main():
     args = get_args()
-    model, metadata = JiTDiffusersModel.from_jit_checkpoint(
+    model, metadata = JiTTransformer2DModel.from_jit_checkpoint(
         checkpoint_path=args.checkpoint_path,
         weights=args.weights,
         map_location="cpu",

@@ -6,8 +6,11 @@ from pathlib import Path
 
 import torch
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-from jit_diffusers import JiTDiffusersModel
+try:
+    from jit_diffusers import JiTTransformer2DModel
+except ModuleNotFoundError:
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
+    from jit_diffusers import JiTTransformer2DModel
 
 
 def get_args():
@@ -39,7 +42,7 @@ def get_args():
 def main():
     args = get_args()
 
-    model = JiTDiffusersModel.from_pretrained(args.model_path)
+    model = JiTTransformer2DModel.from_pretrained(args.model_path)
     checkpoint = model.to_jit_checkpoint(ema_mode=args.ema_mode)
     checkpoint["epoch"] = args.epoch
     checkpoint["optimizer"] = {}
