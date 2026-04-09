@@ -1,9 +1,12 @@
 import argparse
 import json
 import os
+import sys
+from pathlib import Path
 
 import torch
 
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 from jit_diffusers import JiTDiffusersModel
 
 
