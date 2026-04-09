@@ -14,7 +14,7 @@ def broadcat(tensors, dim=-1):
     dim = (dim + shape_len) if dim < 0 else dim
     dims = list(zip(*map(lambda tensor: list(tensor.shape), tensors)))
     expandable_dims = [(index, val) for index, val in enumerate(dims) if index != dim]
-    assert all([*map(lambda tensor: len(set(tensor[1])) <= 2, expandable_dims)]), "invalid dimensions for broadcastable concatentation"
+    assert all([*map(lambda tensor: len(set(tensor[1])) <= 2, expandable_dims)]), "invalid dimensions for broadcastable concatenation"
     max_dims = list(map(lambda tensor: (tensor[0], max(tensor[1])), expandable_dims))
     expanded_dims = list(map(lambda tensor: (tensor[0], (tensor[1],) * num_tensors), max_dims))
     expanded_dims.insert(dim, (dim, dims[dim]))
