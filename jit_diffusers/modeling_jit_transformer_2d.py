@@ -76,8 +76,8 @@ def _config_from_checkpoint(ckpt_args: argparse.Namespace) -> JiTCheckpointConfi
         model_name=str(model_name),
         image_size=int(image_size),
         num_classes=int(num_classes),
-        attn_dropout=float(_get_first_available("attention_dropout", "attn_dropout", default=0.0)),
-        proj_dropout=float(_get_first_available("dropout", "proj_dropout", default=0.0)),
+        attn_dropout=float(_get_first_available("attn_dropout", "attention_dropout", default=0.0)),
+        proj_dropout=float(_get_first_available("proj_dropout", "dropout", default=0.0)),
     )
 
 
