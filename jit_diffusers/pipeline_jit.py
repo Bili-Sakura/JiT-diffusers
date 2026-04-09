@@ -39,5 +39,7 @@ class JiTPipeline(DiffusionPipeline):
         if not return_dict:
             return output if isinstance(output, tuple) else (output.sample,)
         if isinstance(output, tuple):
+            if len(output) == 0:
+                raise ValueError("Expected transformer tuple output to contain at least one tensor.")
             return JiTPipelineOutput(images=output[0])
         return JiTPipelineOutput(images=output.sample)
