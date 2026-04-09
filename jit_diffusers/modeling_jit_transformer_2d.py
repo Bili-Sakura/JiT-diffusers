@@ -15,7 +15,10 @@ from model_jit import JiT_models
 def _extract_module_state_dict(
     state_dict: Dict[str, torch.Tensor], prefixes: Tuple[str, ...] = ("transformer.", "net.")
 ) -> Dict[str, torch.Tensor]:
-    """Extract module state by stripping the first fully-matching prefix."""
+    """Extract module state by stripping the first fully-matching prefix.
+
+    Prefix precedence is left-to-right; `"transformer."` is preferred over legacy `"net."`.
+    """
     for prefix in prefixes:
         if all(key.startswith(prefix) for key in state_dict.keys()):
             return {k[len(prefix):]: v for k, v in state_dict.items()}
@@ -27,7 +30,10 @@ def _build_jit_kwargs(
     num_classes: int,
     attn_dropout: float,
     proj_dropout: float,
+    model_name: str | None = None,
 ) -> Dict[str, object]:
+    # Keep model_name for backward-compatible internal call signatures.
+    _ = model_name
     return {
         "input_size": image_size,
         "in_channels": 3,
@@ -60,9 +66,9 @@ def _config_from_checkpoint(ckpt_args: argparse.Namespace) -> JiTCheckpointConfi
                 return args_dict[key]
         return default
 
-    model_name = _get_first_available("model_type", "model_name", "model")
-    image_size = _get_first_available("sample_size", "image_size", "img_size")
-    num_classes = _get_first_available("num_class_embeds", "num_classes", "class_num")
+    model_name = _get_first_available("model", "model_name", "model_type")
+    image_size = _get_first_available("img_size", "image_size", "sample_size")
+    num_classes = _get_first_available("class_num", "num_classes", "num_class_embeds")
     if model_name is None or image_size is None or num_classes is None:
         raise ValueError("Checkpoint args are missing model/image_size/num_classes information.")
 
@@ -106,6 +112,7 @@ class JiTTransformer2DModel(ModelMixin, ConfigMixin):
                 num_classes=resolved_num_class_embeds,
                 attn_dropout=resolved_attention_dropout,
                 proj_dropout=resolved_dropout,
+                model_name=resolved_model_type,
             )
         )
 
