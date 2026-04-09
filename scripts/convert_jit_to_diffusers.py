@@ -1,6 +1,5 @@
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -31,6 +30,16 @@ def get_args():
     return parser.parse_args()
 
 
+def _config_first(config, *keys, default=None, required: bool = False):
+    for key in keys:
+        value = getattr(config, key, None)
+        if value is not None:
+            return value
+    if required:
+        raise ValueError(f"Missing required config fields: {keys}")
+    return default
+
+
 def main():
     args = get_args()
     model, metadata = JiTTransformer2DModel.from_jit_checkpoint(
@@ -39,29 +48,21 @@ def main():
         map_location="cpu",
     )
 
-    os.makedirs(args.output_dir, exist_ok=True)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(
-        args.output_dir,
+        output_dir,
         safe_serialization=args.safe_serialization,
         variant=args.variant,
     )
 
-    metadata_path = os.path.join(args.output_dir, "conversion_metadata.json")
-    with open(metadata_path, "w", encoding="utf-8") as f:
-        def _config_first(*keys, default=None, required: bool = False):
-            for key in keys:
-                value = getattr(model.config, key, None)
-                if value is not None:
-                    return value
-            if required:
-                raise ValueError(f"Missing required config fields: {keys}")
-            return default
-
-        model_type = _config_first("model_type", "model_name", required=True)
-        sample_size = _config_first("sample_size", "image_size", required=True)
-        num_class_embeds = _config_first("num_class_embeds", "num_classes", required=True)
-        attention_dropout = _config_first("attention_dropout", "attn_dropout", default=0.0)
-        dropout = _config_first("dropout", "proj_dropout", default=0.0)
+    metadata_path = output_dir / "conversion_metadata.json"
+    with metadata_path.open("w", encoding="utf-8") as file:
+        model_type = _config_first(model.config, "model_type", "model_name", required=True)
+        sample_size = _config_first(model.config, "sample_size", "image_size", required=True)
+        num_class_embeds = _config_first(model.config, "num_class_embeds", "num_classes", required=True)
+        attention_dropout = _config_first(model.config, "attention_dropout", "attn_dropout", default=0.0)
+        dropout = _config_first(model.config, "dropout", "proj_dropout", default=0.0)
         json.dump(
             {
                 "source_checkpoint": metadata["checkpoint_path"],
@@ -81,11 +82,11 @@ def main():
                     "proj_dropout": dropout,
                 },
             },
-            f,
+            file,
             indent=2,
         )
 
-    print(f"Saved diffusers model to: {args.output_dir}")
+    print(f"Saved diffusers model to: {output_dir}")
 
 
 if __name__ == "__main__":

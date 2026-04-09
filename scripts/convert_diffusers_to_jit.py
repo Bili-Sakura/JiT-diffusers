@@ -1,6 +1,5 @@
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -39,6 +38,23 @@ def get_args():
     return parser.parse_args()
 
 
+def _first_present(mapping, *keys):
+    for key in keys:
+        if key in mapping and mapping[key] is not None:
+            return mapping[key]
+    return None
+
+
+def _config_first(config, *keys, default=None, required: bool = False):
+    for key in keys:
+        value = getattr(config, key, None)
+        if value is not None:
+            return value
+    if required:
+        raise ValueError(f"Missing required config fields: {keys}")
+    return default
+
+
 def main():
     args = get_args()
 
@@ -47,49 +63,35 @@ def main():
     checkpoint["epoch"] = args.epoch
     checkpoint["optimizer"] = {}
 
-    metadata_path = args.metadata_path or os.path.join(args.model_path, "conversion_metadata.json")
+    model_path = Path(args.model_path)
+    metadata_path = Path(args.metadata_path) if args.metadata_path else model_path / "conversion_metadata.json"
     metadata_args = None
-    if os.path.exists(metadata_path):
-        with open(metadata_path, "r", encoding="utf-8") as f:
-            metadata = json.load(f)
+    if metadata_path.exists():
+        with metadata_path.open("r", encoding="utf-8") as file:
+            metadata = json.load(file)
         metadata_args = metadata.get("jit_args")
 
     source_args = metadata_args or {}
 
-    def _first_present(mapping, *keys):
-        for key in keys:
-            if key in mapping and mapping[key] is not None:
-                return mapping[key]
-        return None
-
-    def _config_first(*keys, default=None, required: bool = False):
-        for key in keys:
-            value = getattr(model.config, key, None)
-            if value is not None:
-                return value
-        if required:
-            raise ValueError(f"Missing required config fields: {keys}")
-        return default
-
     model_type = _first_present(source_args, "model_type", "model_name", "model")
     if model_type is None:
-        model_type = _config_first("model_type", "model_name", required=True)
+        model_type = _config_first(model.config, "model_type", "model_name", required=True)
 
     sample_size = _first_present(source_args, "sample_size", "image_size", "img_size")
     if sample_size is None:
-        sample_size = _config_first("sample_size", "image_size", required=True)
+        sample_size = _config_first(model.config, "sample_size", "image_size", required=True)
 
     num_class_embeds = _first_present(source_args, "num_class_embeds", "num_classes", "class_num")
     if num_class_embeds is None:
-        num_class_embeds = _config_first("num_class_embeds", "num_classes", required=True)
+        num_class_embeds = _config_first(model.config, "num_class_embeds", "num_classes", required=True)
 
     attention_dropout = _first_present(source_args, "attention_dropout", "attn_dropout")
     if attention_dropout is None:
-        attention_dropout = _config_first("attention_dropout", "attn_dropout", default=0.0)
+        attention_dropout = _config_first(model.config, "attention_dropout", "attn_dropout", default=0.0)
 
     dropout = _first_present(source_args, "dropout", "proj_dropout")
     if dropout is None:
-        dropout = _config_first("dropout", "proj_dropout", default=0.0)
+        dropout = _config_first(model.config, "dropout", "proj_dropout", default=0.0)
 
     args_dict = {
         "model": model_type,
@@ -106,11 +108,10 @@ def main():
     }
     checkpoint["args"] = argparse.Namespace(**args_dict)
 
-    output_dir = os.path.dirname(os.path.abspath(args.output_path))
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
-    torch.save(checkpoint, args.output_path)
-    print(f"Saved JiT checkpoint to: {args.output_path}")
+    output_path = Path(args.output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(checkpoint, str(output_path))
+    print(f"Saved JiT checkpoint to: {output_path}")
 
 
 if __name__ == "__main__":

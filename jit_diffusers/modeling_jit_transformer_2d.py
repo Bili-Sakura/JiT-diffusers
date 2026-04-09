@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Dict, Literal, Tuple
+from typing import Any, Dict, Literal, Tuple
 
 import torch
 from diffusers import ConfigMixin, ModelMixin
 from diffusers.configuration_utils import register_to_config
 from diffusers.models.modeling_outputs import Transformer2DModelOutput
 
-from model_jit import JiT_models
+from .modeling_jit_backbone import JiT_models
 
 
 def _extract_module_state_dict(
@@ -52,10 +53,10 @@ class JiTCheckpointConfig:
     proj_dropout: float
 
 
-def _config_from_checkpoint(ckpt_args: argparse.Namespace) -> JiTCheckpointConfig:
+def _config_from_checkpoint(ckpt_args: argparse.Namespace | Mapping[str, Any]) -> JiTCheckpointConfig:
     if isinstance(ckpt_args, argparse.Namespace):
         args_dict = vars(ckpt_args)
-    elif isinstance(ckpt_args, dict):
+    elif isinstance(ckpt_args, Mapping):
         args_dict = ckpt_args
     else:
         raise TypeError(f"Unsupported checkpoint args type: {type(ckpt_args)}")
@@ -116,7 +117,13 @@ class JiTTransformer2DModel(ModelMixin, ConfigMixin):
             )
         )
 
-    def forward(self, sample: torch.Tensor, timestep: torch.Tensor, class_labels: torch.Tensor, return_dict: bool = True):
+    def forward(
+        self,
+        sample: torch.Tensor,
+        timestep: torch.Tensor,
+        class_labels: torch.Tensor,
+        return_dict: bool = True,
+    ):
         timestep = torch.as_tensor(timestep, device=sample.device)
         if timestep.ndim == 0:
             timestep = timestep.repeat(sample.shape[0])
