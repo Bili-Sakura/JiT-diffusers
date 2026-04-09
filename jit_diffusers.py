@@ -15,6 +15,10 @@ from model_jit import JiT_models
 def _extract_module_state_dict(
     state_dict: Dict[str, torch.Tensor], prefixes: Tuple[str, ...] = ("transformer.", "net.")
 ) -> Dict[str, torch.Tensor]:
+    """Extract a module state dict by stripping the first fully-matching prefix.
+
+    Prefix precedence is left-to-right; `"transformer."` is preferred over legacy `"net."`.
+    """
     for prefix in prefixes:
         if all(key.startswith(prefix) for key in state_dict.keys()):
             return {k[len(prefix):]: v for k, v in state_dict.items()}
@@ -22,11 +26,13 @@ def _extract_module_state_dict(
 
 
 def _build_jit_kwargs(
+    model_name: str,
     image_size: int,
     num_classes: int,
     attn_dropout: float,
     proj_dropout: float,
 ) -> Dict[str, object]:
+    _ = model_name
     return {
         "input_size": image_size,
         "in_channels": 3,
@@ -90,7 +96,7 @@ class JiTDiffusersModel(ModelMixin, ConfigMixin):
         dropout: float | None = None,
     ):
         super().__init__()
-        model_type = model_type or model_name
+        model_type = model_name if model_type is None else model_type
         sample_size = image_size if sample_size is None else sample_size
         num_class_embeds = num_classes if num_class_embeds is None else num_class_embeds
         attention_dropout = attn_dropout if attention_dropout is None else attention_dropout
@@ -107,6 +113,7 @@ class JiTDiffusersModel(ModelMixin, ConfigMixin):
 
         self.transformer = JiT_models[model_name](
             **_build_jit_kwargs(
+                model_name=model_name,
                 image_size=image_size,
                 num_classes=num_classes,
                 attn_dropout=attn_dropout,

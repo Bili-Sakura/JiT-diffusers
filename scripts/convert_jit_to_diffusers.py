@@ -61,6 +61,7 @@ def main():
                     "num_class_embeds": num_class_embeds,
                     "attention_dropout": attention_dropout,
                     "dropout": dropout,
+                    # Keep legacy JiT argument aliases for backward compatibility.
                     "model": model_type,
                     "img_size": sample_size,
                     "class_num": num_class_embeds,

@@ -87,6 +87,7 @@ def main():
         "class_num": num_class_embeds,
         "attn_dropout": attention_dropout,
         "proj_dropout": dropout,
+        # Keep diffusers-style aliases alongside legacy JiT keys for compatibility.
         "model_type": model_type,
         "sample_size": sample_size,
         "num_class_embeds": num_class_embeds,
