@@ -152,6 +152,7 @@ python scripts/convert_jit_to_diffusers.py \
   --weights ema1 \
   --safe_serialization
 ```
+The generated `conversion_metadata.json` stores diffusers-style fields (`model_type`, `sample_size`, `num_class_embeds`, `attention_dropout`, `dropout`) with JiT legacy aliases for compatibility.
 
 Convert a diffusers model back to JiT checkpoint format:
 ```

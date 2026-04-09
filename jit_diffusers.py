@@ -12,14 +12,16 @@ from diffusers.models.modeling_outputs import Transformer2DModelOutput
 from model_jit import JiT_models
 
 
-def _extract_net_state_dict(state_dict: Dict[str, torch.Tensor], prefix: str = "net.") -> Dict[str, torch.Tensor]:
-    if all(key.startswith(prefix) for key in state_dict.keys()):
-        return {k[len(prefix):]: v for k, v in state_dict.items()}
+def _extract_module_state_dict(
+    state_dict: Dict[str, torch.Tensor], prefixes: Tuple[str, ...] = ("transformer.", "net.")
+) -> Dict[str, torch.Tensor]:
+    for prefix in prefixes:
+        if all(key.startswith(prefix) for key in state_dict.keys()):
+            return {k[len(prefix):]: v for k, v in state_dict.items()}
     return state_dict
 
 
 def _build_jit_kwargs(
-    model_name: str,
     image_size: int,
     num_classes: int,
     attn_dropout: float,
@@ -44,12 +46,31 @@ class JiTCheckpointConfig:
 
 
 def _config_from_checkpoint(ckpt_args: argparse.Namespace) -> JiTCheckpointConfig:
+    if isinstance(ckpt_args, argparse.Namespace):
+        args_dict = vars(ckpt_args)
+    elif isinstance(ckpt_args, dict):
+        args_dict = ckpt_args
+    else:
+        raise TypeError(f"Unsupported checkpoint args type: {type(ckpt_args)}")
+
+    def _first(*keys: str, default=None):
+        for key in keys:
+            if key in args_dict and args_dict[key] is not None:
+                return args_dict[key]
+        return default
+
+    model_name = _first("model", "model_name", "model_type")
+    image_size = _first("img_size", "image_size", "sample_size")
+    num_classes = _first("class_num", "num_classes", "num_class_embeds")
+    if model_name is None or image_size is None or num_classes is None:
+        raise ValueError("Checkpoint args are missing model/image_size/num_classes information.")
+
     return JiTCheckpointConfig(
-        model_name=getattr(ckpt_args, "model"),
-        image_size=int(getattr(ckpt_args, "img_size")),
-        num_classes=int(getattr(ckpt_args, "class_num")),
-        attn_dropout=float(getattr(ckpt_args, "attn_dropout", 0.0)),
-        proj_dropout=float(getattr(ckpt_args, "proj_dropout", 0.0)),
+        model_name=str(model_name),
+        image_size=int(image_size),
+        num_classes=int(num_classes),
+        attn_dropout=float(_first("attn_dropout", "attention_dropout", default=0.0)),
+        proj_dropout=float(_first("proj_dropout", "dropout", default=0.0)),
     )
 
 
@@ -62,20 +83,37 @@ class JiTDiffusersModel(ModelMixin, ConfigMixin):
         num_classes: int = 1000,
         attn_dropout: float = 0.0,
         proj_dropout: float = 0.0,
+        model_type: str | None = None,
+        sample_size: int | None = None,
+        num_class_embeds: int | None = None,
+        attention_dropout: float | None = None,
+        dropout: float | None = None,
     ):
         super().__init__()
+        model_type = model_type or model_name
+        sample_size = image_size if sample_size is None else sample_size
+        num_class_embeds = num_classes if num_class_embeds is None else num_class_embeds
+        attention_dropout = attn_dropout if attention_dropout is None else attention_dropout
+        dropout = proj_dropout if dropout is None else dropout
+
+        model_name = model_type
+        image_size = sample_size
+        num_classes = num_class_embeds
+        attn_dropout = attention_dropout
+        proj_dropout = dropout
+
         if model_name not in JiT_models:
             raise ValueError(f"Unknown model '{model_name}'. Available: {list(JiT_models.keys())}")
 
-        self.net = JiT_models[model_name](
+        self.transformer = JiT_models[model_name](
             **_build_jit_kwargs(
-                model_name=model_name,
                 image_size=image_size,
                 num_classes=num_classes,
                 attn_dropout=attn_dropout,
                 proj_dropout=proj_dropout,
             )
         )
+        self.net = self.transformer
 
     def forward(self, sample: torch.Tensor, timestep: torch.Tensor, class_labels: torch.Tensor, return_dict: bool = True):
         timestep = torch.as_tensor(timestep, device=sample.device)
@@ -86,7 +124,7 @@ class JiTDiffusersModel(ModelMixin, ConfigMixin):
             if timestep.shape[0] == 1 and sample.shape[0] > 1:
                 timestep = timestep.repeat(sample.shape[0])
 
-        denoised = self.net(sample, timestep, class_labels)
+        denoised = self.transformer(sample, timestep, class_labels)
         if not return_dict:
             return (denoised,)
         return Transformer2DModelOutput(sample=denoised)
@@ -110,14 +148,19 @@ class JiTDiffusersModel(ModelMixin, ConfigMixin):
             num_classes=config.num_classes,
             attn_dropout=config.attn_dropout,
             proj_dropout=config.proj_dropout,
+            model_type=config.model_name,
+            sample_size=config.image_size,
+            num_class_embeds=config.num_classes,
+            attention_dropout=config.attn_dropout,
+            dropout=config.proj_dropout,
         )
 
         key = "model" if weights == "model" else f"model_{weights}"
         if key not in checkpoint:
             raise ValueError(f"Checkpoint key '{key}' not found. Available keys: {list(checkpoint.keys())}")
 
-        model_state = _extract_net_state_dict(checkpoint[key])
-        model.net.load_state_dict(model_state, strict=strict)
+        model_state = _extract_module_state_dict(checkpoint[key])
+        model.transformer.load_state_dict(model_state, strict=strict)
 
         metadata = {
             "checkpoint_path": checkpoint_path,
@@ -132,7 +175,7 @@ class JiTDiffusersModel(ModelMixin, ConfigMixin):
         ema_mode: Literal["none", "copy_to_both"] = "copy_to_both",
         prefix: str = "net.",
     ) -> Dict[str, object]:
-        base_state = {f"{prefix}{k}": v.detach().cpu() for k, v in self.net.state_dict().items()}
+        base_state = {f"{prefix}{k}": v.detach().cpu() for k, v in self.transformer.state_dict().items()}
         checkpoint = {"model": base_state}
         if ema_mode == "copy_to_both":
             checkpoint["model_ema1"] = {k: v.clone() for k, v in base_state.items()}

@@ -42,17 +42,27 @@ def main():
 
     metadata_path = os.path.join(args.output_dir, "conversion_metadata.json")
     with open(metadata_path, "w", encoding="utf-8") as f:
+        model_type = getattr(model.config, "model_type", getattr(model.config, "model_name"))
+        sample_size = getattr(model.config, "sample_size", getattr(model.config, "image_size"))
+        num_class_embeds = getattr(model.config, "num_class_embeds", getattr(model.config, "num_classes"))
+        attention_dropout = getattr(model.config, "attention_dropout", getattr(model.config, "attn_dropout", 0.0))
+        dropout = getattr(model.config, "dropout", getattr(model.config, "proj_dropout", 0.0))
         json.dump(
             {
                 "source_checkpoint": metadata["checkpoint_path"],
                 "weights": metadata["weights"],
                 "epoch": metadata["epoch"],
                 "jit_args": {
-                    "model": model.config.model_name,
-                    "img_size": model.config.image_size,
-                    "class_num": model.config.num_classes,
-                    "attn_dropout": model.config.attn_dropout,
-                    "proj_dropout": model.config.proj_dropout,
+                    "model_type": model_type,
+                    "sample_size": sample_size,
+                    "num_class_embeds": num_class_embeds,
+                    "attention_dropout": attention_dropout,
+                    "dropout": dropout,
+                    "model": model_type,
+                    "img_size": sample_size,
+                    "class_num": num_class_embeds,
+                    "attn_dropout": attention_dropout,
+                    "proj_dropout": dropout,
                 },
             },
             f,

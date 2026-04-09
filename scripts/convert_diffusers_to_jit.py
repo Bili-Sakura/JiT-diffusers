@@ -48,12 +48,47 @@ def main():
             metadata = json.load(f)
         metadata_args = metadata.get("jit_args")
 
-    args_dict = metadata_args or {
-        "model": model.config.model_name,
-        "img_size": model.config.image_size,
-        "class_num": model.config.num_classes,
-        "attn_dropout": model.config.attn_dropout,
-        "proj_dropout": model.config.proj_dropout,
+    source_args = metadata_args or {}
+    model_type = (
+        source_args.get("model")
+        or source_args.get("model_name")
+        or source_args.get("model_type")
+        or getattr(model.config, "model_type", getattr(model.config, "model_name"))
+    )
+    sample_size = (
+        source_args.get("img_size")
+        or source_args.get("image_size")
+        or source_args.get("sample_size")
+        or getattr(model.config, "sample_size", getattr(model.config, "image_size"))
+    )
+    num_class_embeds = (
+        source_args.get("class_num")
+        or source_args.get("num_classes")
+        or source_args.get("num_class_embeds")
+        or getattr(model.config, "num_class_embeds", getattr(model.config, "num_classes"))
+    )
+    attention_dropout = (
+        source_args.get("attn_dropout")
+        or source_args.get("attention_dropout")
+        or getattr(model.config, "attention_dropout", getattr(model.config, "attn_dropout", 0.0))
+    )
+    dropout = (
+        source_args.get("proj_dropout")
+        or source_args.get("dropout")
+        or getattr(model.config, "dropout", getattr(model.config, "proj_dropout", 0.0))
+    )
+
+    args_dict = {
+        "model": model_type,
+        "img_size": sample_size,
+        "class_num": num_class_embeds,
+        "attn_dropout": attention_dropout,
+        "proj_dropout": dropout,
+        "model_type": model_type,
+        "sample_size": sample_size,
+        "num_class_embeds": num_class_embeds,
+        "attention_dropout": attention_dropout,
+        "dropout": dropout,
     }
     checkpoint["args"] = argparse.Namespace(**args_dict)
 
