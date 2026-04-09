@@ -110,7 +110,7 @@ def main():
 
     output_path = Path(args.output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(checkpoint, output_path)
+    torch.save(checkpoint, str(output_path))
     print(f"Saved JiT checkpoint to: {output_path}")
 
 

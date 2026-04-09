@@ -40,4 +40,6 @@ class JiTPipeline(DiffusionPipeline):
             if isinstance(output, tuple):
                 return output
             return (output.sample,)
+        if isinstance(output, tuple):
+            return JiTPipelineOutput(images=output[0])
         return JiTPipelineOutput(images=output.sample)
