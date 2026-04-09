@@ -142,7 +142,10 @@ under ```fid_stats```.
 
 ### Diffusers integration and checkpoint conversion
 
-This repo now includes a diffusers-compatible model wrapper (`JiTDiffusersModel`) and conversion scripts.
+This repo now includes a self-contained diffusers-style package:
+- model: `JiTTransformer2DModel` (legacy alias: `JiTDiffusersModel`)
+- pipeline: `JiTPipeline`
+- package layout under `jit_diffusers/` (modeling + pipeline modules)
 
 Convert a JiT training checkpoint to diffusers format:
 ```
@@ -152,6 +155,7 @@ python scripts/convert_jit_to_diffusers.py \
   --weights ema1 \
   --safe_serialization
 ```
+The generated `conversion_metadata.json` stores diffusers-style fields (`model_type`, `sample_size`, `num_class_embeds`, `attention_dropout`, `dropout`) with JiT legacy aliases for compatibility.
 
 Convert a diffusers model back to JiT checkpoint format:
 ```

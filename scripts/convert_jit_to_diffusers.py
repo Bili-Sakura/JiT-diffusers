@@ -1,8 +1,14 @@
 import argparse
 import json
 import os
+import sys
+from pathlib import Path
 
-from jit_diffusers import JiTDiffusersModel
+try:
+    from jit_diffusers import JiTTransformer2DModel
+except ModuleNotFoundError:
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
+    from jit_diffusers import JiTTransformer2DModel
 
 
 def get_args():
@@ -27,7 +33,7 @@ def get_args():
 
 def main():
     args = get_args()
-    model, metadata = JiTDiffusersModel.from_jit_checkpoint(
+    model, metadata = JiTTransformer2DModel.from_jit_checkpoint(
         checkpoint_path=args.checkpoint_path,
         weights=args.weights,
         map_location="cpu",
@@ -42,17 +48,37 @@ def main():
 
     metadata_path = os.path.join(args.output_dir, "conversion_metadata.json")
     with open(metadata_path, "w", encoding="utf-8") as f:
+        def _config_first(*keys, default=None, required: bool = False):
+            for key in keys:
+                value = getattr(model.config, key, None)
+                if value is not None:
+                    return value
+            if required:
+                raise ValueError(f"Missing required config fields: {keys}")
+            return default
+
+        model_type = _config_first("model_type", "model_name", required=True)
+        sample_size = _config_first("sample_size", "image_size", required=True)
+        num_class_embeds = _config_first("num_class_embeds", "num_classes", required=True)
+        attention_dropout = _config_first("attention_dropout", "attn_dropout", default=0.0)
+        dropout = _config_first("dropout", "proj_dropout", default=0.0)
         json.dump(
             {
                 "source_checkpoint": metadata["checkpoint_path"],
                 "weights": metadata["weights"],
                 "epoch": metadata["epoch"],
                 "jit_args": {
-                    "model": model.config.model_name,
-                    "img_size": model.config.image_size,
-                    "class_num": model.config.num_classes,
-                    "attn_dropout": model.config.attn_dropout,
-                    "proj_dropout": model.config.proj_dropout,
+                    "model_type": model_type,
+                    "sample_size": sample_size,
+                    "num_class_embeds": num_class_embeds,
+                    "attention_dropout": attention_dropout,
+                    "dropout": dropout,
+                    # Keep legacy JiT argument aliases for backward compatibility.
+                    "model": model_type,
+                    "img_size": sample_size,
+                    "class_num": num_class_embeds,
+                    "attn_dropout": attention_dropout,
+                    "proj_dropout": dropout,
                 },
             },
             f,

@@ -1,10 +1,16 @@
 import argparse
 import json
 import os
+import sys
+from pathlib import Path
 
 import torch
 
-from jit_diffusers import JiTDiffusersModel
+try:
+    from jit_diffusers import JiTTransformer2DModel
+except ModuleNotFoundError:
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
+    from jit_diffusers import JiTTransformer2DModel
 
 
 def get_args():
@@ -36,7 +42,7 @@ def get_args():
 def main():
     args = get_args()
 
-    model = JiTDiffusersModel.from_pretrained(args.model_path)
+    model = JiTTransformer2DModel.from_pretrained(args.model_path)
     checkpoint = model.to_jit_checkpoint(ema_mode=args.ema_mode)
     checkpoint["epoch"] = args.epoch
     checkpoint["optimizer"] = {}
@@ -48,12 +54,55 @@ def main():
             metadata = json.load(f)
         metadata_args = metadata.get("jit_args")
 
-    args_dict = metadata_args or {
-        "model": model.config.model_name,
-        "img_size": model.config.image_size,
-        "class_num": model.config.num_classes,
-        "attn_dropout": model.config.attn_dropout,
-        "proj_dropout": model.config.proj_dropout,
+    source_args = metadata_args or {}
+
+    def _first_present(mapping, *keys):
+        for key in keys:
+            if key in mapping and mapping[key] is not None:
+                return mapping[key]
+        return None
+
+    def _config_first(*keys, default=None, required: bool = False):
+        for key in keys:
+            value = getattr(model.config, key, None)
+            if value is not None:
+                return value
+        if required:
+            raise ValueError(f"Missing required config fields: {keys}")
+        return default
+
+    model_type = _first_present(source_args, "model_type", "model_name", "model")
+    if model_type is None:
+        model_type = _config_first("model_type", "model_name", required=True)
+
+    sample_size = _first_present(source_args, "sample_size", "image_size", "img_size")
+    if sample_size is None:
+        sample_size = _config_first("sample_size", "image_size", required=True)
+
+    num_class_embeds = _first_present(source_args, "num_class_embeds", "num_classes", "class_num")
+    if num_class_embeds is None:
+        num_class_embeds = _config_first("num_class_embeds", "num_classes", required=True)
+
+    attention_dropout = _first_present(source_args, "attention_dropout", "attn_dropout")
+    if attention_dropout is None:
+        attention_dropout = _config_first("attention_dropout", "attn_dropout", default=0.0)
+
+    dropout = _first_present(source_args, "dropout", "proj_dropout")
+    if dropout is None:
+        dropout = _config_first("dropout", "proj_dropout", default=0.0)
+
+    args_dict = {
+        "model": model_type,
+        "img_size": sample_size,
+        "class_num": num_class_embeds,
+        "attn_dropout": attention_dropout,
+        "proj_dropout": dropout,
+        # Keep diffusers-style aliases alongside legacy JiT keys for compatibility.
+        "model_type": model_type,
+        "sample_size": sample_size,
+        "num_class_embeds": num_class_embeds,
+        "attention_dropout": attention_dropout,
+        "dropout": dropout,
     }
     checkpoint["args"] = argparse.Namespace(**args_dict)
 
