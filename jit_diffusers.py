@@ -26,13 +26,11 @@ def _extract_module_state_dict(
 
 
 def _build_jit_kwargs(
-    model_name: str,
     image_size: int,
     num_classes: int,
     attn_dropout: float,
     proj_dropout: float,
 ) -> Dict[str, object]:
-    _ = model_name
     return {
         "input_size": image_size,
         "in_channels": 3,
@@ -59,15 +57,15 @@ def _config_from_checkpoint(ckpt_args: argparse.Namespace) -> JiTCheckpointConfi
     else:
         raise TypeError(f"Unsupported checkpoint args type: {type(ckpt_args)}")
 
-    def _first(*keys: str, default=None):
+    def _get_first_available(*keys: str, default=None):
         for key in keys:
             if key in args_dict and args_dict[key] is not None:
                 return args_dict[key]
         return default
 
-    model_name = _first("model", "model_name", "model_type")
-    image_size = _first("img_size", "image_size", "sample_size")
-    num_classes = _first("class_num", "num_classes", "num_class_embeds")
+    model_name = _get_first_available("model", "model_name", "model_type")
+    image_size = _get_first_available("img_size", "image_size", "sample_size")
+    num_classes = _get_first_available("class_num", "num_classes", "num_class_embeds")
     if model_name is None or image_size is None or num_classes is None:
         raise ValueError("Checkpoint args are missing model/image_size/num_classes information.")
 
@@ -75,8 +73,8 @@ def _config_from_checkpoint(ckpt_args: argparse.Namespace) -> JiTCheckpointConfi
         model_name=str(model_name),
         image_size=int(image_size),
         num_classes=int(num_classes),
-        attn_dropout=float(_first("attn_dropout", "attention_dropout", default=0.0)),
-        proj_dropout=float(_first("proj_dropout", "dropout", default=0.0)),
+        attn_dropout=float(_get_first_available("attn_dropout", "attention_dropout", default=0.0)),
+        proj_dropout=float(_get_first_available("proj_dropout", "dropout", default=0.0)),
     )
 
 
@@ -96,28 +94,21 @@ class JiTDiffusersModel(ModelMixin, ConfigMixin):
         dropout: float | None = None,
     ):
         super().__init__()
-        model_type = model_name if model_type is None else model_type
-        sample_size = image_size if sample_size is None else sample_size
-        num_class_embeds = num_classes if num_class_embeds is None else num_class_embeds
-        attention_dropout = attn_dropout if attention_dropout is None else attention_dropout
-        dropout = proj_dropout if dropout is None else dropout
+        resolved_model_type = model_name if model_type is None else model_type
+        resolved_sample_size = image_size if sample_size is None else sample_size
+        resolved_num_class_embeds = num_classes if num_class_embeds is None else num_class_embeds
+        resolved_attention_dropout = attn_dropout if attention_dropout is None else attention_dropout
+        resolved_dropout = proj_dropout if dropout is None else dropout
 
-        model_name = model_type
-        image_size = sample_size
-        num_classes = num_class_embeds
-        attn_dropout = attention_dropout
-        proj_dropout = dropout
+        if resolved_model_type not in JiT_models:
+            raise ValueError(f"Unknown model '{resolved_model_type}'. Available: {list(JiT_models.keys())}")
 
-        if model_name not in JiT_models:
-            raise ValueError(f"Unknown model '{model_name}'. Available: {list(JiT_models.keys())}")
-
-        self.transformer = JiT_models[model_name](
+        self.transformer = JiT_models[resolved_model_type](
             **_build_jit_kwargs(
-                model_name=model_name,
-                image_size=image_size,
-                num_classes=num_classes,
-                attn_dropout=attn_dropout,
-                proj_dropout=proj_dropout,
+                image_size=resolved_sample_size,
+                num_classes=resolved_num_class_embeds,
+                attn_dropout=resolved_attention_dropout,
+                proj_dropout=resolved_dropout,
             )
         )
         self.net = self.transformer
