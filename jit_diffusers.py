@@ -30,7 +30,9 @@ def _build_jit_kwargs(
     num_classes: int,
     attn_dropout: float,
     proj_dropout: float,
+    model_name: str | None = None,
 ) -> Dict[str, object]:
+    _ = model_name
     return {
         "input_size": image_size,
         "in_channels": 3,
@@ -105,13 +107,13 @@ class JiTDiffusersModel(ModelMixin, ConfigMixin):
 
         self.transformer = JiT_models[resolved_model_type](
             **_build_jit_kwargs(
+                model_name=resolved_model_type,
                 image_size=resolved_sample_size,
                 num_classes=resolved_num_class_embeds,
                 attn_dropout=resolved_attention_dropout,
                 proj_dropout=resolved_dropout,
             )
         )
-        self.net = self.transformer
 
     def forward(self, sample: torch.Tensor, timestep: torch.Tensor, class_labels: torch.Tensor, return_dict: bool = True):
         timestep = torch.as_tensor(timestep, device=sample.device)
@@ -181,3 +183,11 @@ class JiTDiffusersModel(ModelMixin, ConfigMixin):
         elif ema_mode != "none":
             raise ValueError(f"Unsupported ema_mode='{ema_mode}'.")
         return checkpoint
+
+    @property
+    def net(self):
+        return self.transformer
+
+    @net.setter
+    def net(self, module):
+        self.transformer = module

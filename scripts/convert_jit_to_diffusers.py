@@ -45,11 +45,20 @@ def main():
 
     metadata_path = os.path.join(args.output_dir, "conversion_metadata.json")
     with open(metadata_path, "w", encoding="utf-8") as f:
-        model_type = getattr(model.config, "model_type", getattr(model.config, "model_name"))
-        sample_size = getattr(model.config, "sample_size", getattr(model.config, "image_size"))
-        num_class_embeds = getattr(model.config, "num_class_embeds", getattr(model.config, "num_classes"))
-        attention_dropout = getattr(model.config, "attention_dropout", getattr(model.config, "attn_dropout", 0.0))
-        dropout = getattr(model.config, "dropout", getattr(model.config, "proj_dropout", 0.0))
+        def _config_first(*keys, default=None, required: bool = False):
+            for key in keys:
+                value = getattr(model.config, key, None)
+                if value is not None:
+                    return value
+            if required:
+                raise ValueError(f"Missing required config fields: {keys}")
+            return default
+
+        model_type = _config_first("model_type", "model_name", required=True)
+        sample_size = _config_first("sample_size", "image_size", required=True)
+        num_class_embeds = _config_first("num_class_embeds", "num_classes", required=True)
+        attention_dropout = _config_first("attention_dropout", "attn_dropout", default=0.0)
+        dropout = _config_first("dropout", "proj_dropout", default=0.0)
         json.dump(
             {
                 "source_checkpoint": metadata["checkpoint_path"],
