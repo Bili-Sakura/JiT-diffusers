@@ -165,6 +165,20 @@ python scripts/convert_diffusers_to_jit.py \
   --ema_mode copy_to_both
 ```
 
+Run a single-image test inference from a converted diffusers model (script at repo root):
+```
+python run_jit_diffusers_inference.py \
+  --model_path /root/worksapce/projects/JiT-diffusers/models/BiliSakura/JiT-diffusers/JiT-B-32 \
+  --output_path /root/worksapce/projects/JiT-diffusers/models/BiliSakura/JiT-diffusers/demo_images/jit_b32_test_inference.png \
+  --class_label 207 \
+  --seed 42 \
+  --steps 8 \
+  --cfg 2.9 \
+  --interval_min 0.1 \
+  --interval_max 1.0 \
+  --noise_scale 2.0
+```
+
 ### Acknowledgements
 
 We thank Google TPU Research Cloud (TRC) for granting us access to TPUs, and the MIT
