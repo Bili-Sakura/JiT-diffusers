@@ -57,6 +57,7 @@ class TimestepEmbedder(nn.Module):
 
     def forward(self, t):
         t_freq = self.timestep_embedding(t, self.frequency_embedding_size)
+        t_freq = t_freq.to(dtype=self.mlp[0].weight.dtype)
         t_emb = self.mlp(t_freq)
         return t_emb
 
@@ -77,12 +78,13 @@ def scaled_dot_product_attention(query, key, value, dropout_p=0.0) -> torch.Tens
     scale_factor = 1 / math.sqrt(query.size(-1))
     attn_bias = torch.zeros(query.size(0), 1, query_len, key_len, dtype=query.dtype, device=query.device)
 
-    with torch.cuda.amp.autocast(enabled=False):
+    with torch.amp.autocast("cuda", enabled=False):
         attn_weight = query.float() @ key.float().transpose(-2, -1) * scale_factor
     attn_weight += attn_bias
     attn_weight = torch.softmax(attn_weight, dim=-1)
     attn_weight = torch.dropout(attn_weight, dropout_p, train=True)
-    return attn_weight @ value
+    out = attn_weight @ value.float()
+    return out.to(query.dtype)
 
 
 class Attention(nn.Module):
@@ -111,6 +113,7 @@ class Attention(nn.Module):
 
         x = scaled_dot_product_attention(q, k, v, dropout_p=self.attn_drop.p if self.training else 0.0)
         x = x.transpose(1, 2).reshape(batch_size, num_tokens, channels)
+        x = x.to(self.proj.weight.dtype)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -138,7 +141,6 @@ class FinalLayer(nn.Module):
         self.linear = nn.Linear(hidden_size, patch_size * patch_size * out_channels, bias=True)
         self.adaLN_modulation = nn.Sequential(nn.SiLU(), nn.Linear(hidden_size, 2 * hidden_size, bias=True))
 
-    @torch.compile
     def forward(self, x, c):
         shift, scale = self.adaLN_modulation(c).chunk(2, dim=1)
         x = modulate(self.norm_final(x), shift, scale)
@@ -156,7 +158,6 @@ class JiTBlock(nn.Module):
         self.mlp = SwiGLUFFN(hidden_size, mlp_hidden_dim, drop=proj_drop)
         self.adaLN_modulation = nn.Sequential(nn.SiLU(), nn.Linear(hidden_size, 6 * hidden_size, bias=True))
 
-    @torch.compile
     def forward(self, x, c, feat_rope=None):
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, dim=-1)
         x = x + gate_msa.unsqueeze(1) * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), rope=feat_rope)

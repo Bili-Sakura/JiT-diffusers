@@ -13,6 +13,21 @@ from .modeling_jit_transformer_2d import JiTTransformer2DModel
 from .scheduling_jit import JiTScheduler
 
 
+RECOMMENDED_CFG_BY_MODEL = {
+    "JiT-B/16": 3.0,
+    "JiT-L/16": 2.4,
+    "JiT-H/16": 2.2,
+    "JiT-B/32": 3.0,
+    "JiT-L/32": 2.5,
+    "JiT-H/32": 2.3,
+}
+
+RECOMMENDED_NOISE_BY_RESOLUTION = {
+    256: 1.0,
+    512: 2.0,
+}
+
+
 @dataclass
 class JiTPipelineOutput(BaseOutput):
     images: List["PIL.Image.Image"] | np.ndarray | torch.Tensor
@@ -51,10 +66,10 @@ class JiTPipeline(DiffusionPipeline):
         self,
         class_labels: int | List[int] | torch.Tensor,
         num_inference_steps: int = 50,
-        guidance_scale: float = 2.9,
+        guidance_scale: float | None = None,
         guidance_interval_min: float = 0.1,
         guidance_interval_max: float = 1.0,
-        noise_scale: float = 2.0,
+        noise_scale: float | None = None,
         t_eps: float = 5e-2,
         sampling_method: str | None = None,
         generator: torch.Generator | List[torch.Generator] | None = None,
@@ -81,6 +96,12 @@ class JiTPipeline(DiffusionPipeline):
         latent_size = int(self.transformer.config.sample_size)
         latent_channels = int(getattr(self.transformer.config, "in_channels", 3))
         num_classes = int(self.transformer.config.num_class_embeds)
+        model_type = str(getattr(self.transformer.config, "model_type", ""))
+
+        if guidance_scale is None:
+            guidance_scale = RECOMMENDED_CFG_BY_MODEL.get(model_type, 2.9)
+        if noise_scale is None:
+            noise_scale = RECOMMENDED_NOISE_BY_RESOLUTION.get(latent_size, 1.0)
 
         class_labels = class_labels.clamp(0, num_classes - 1)
         class_null = torch.full_like(class_labels, num_classes)
@@ -102,7 +123,9 @@ class JiTPipeline(DiffusionPipeline):
             x_uncond = self.transformer(sample=z_value, timestep=t.flatten(), class_labels=class_null).sample
             v_uncond = (x_uncond - z_value) / (1.0 - t).clamp_min(t_eps)
 
-            interval_mask = (t < guidance_interval_max) & (t > guidance_interval_min)
+            interval_mask = t < guidance_interval_max
+            if guidance_interval_min != 0.0:
+                interval_mask = interval_mask & (t > guidance_interval_min)
             scale = torch.where(
                 interval_mask,
                 torch.tensor(guidance_scale, device=self._execution_device, dtype=latents.dtype),
