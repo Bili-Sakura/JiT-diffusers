@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Dict, Literal, Tuple
@@ -24,6 +25,31 @@ def _extract_module_state_dict(
         if all(key.startswith(prefix) for key in state_dict.keys()):
             return {k[len(prefix):]: v for k, v in state_dict.items()}
     return state_dict
+
+
+def _strip_prefix_if_present(
+    state_dict: Dict[str, torch.Tensor], prefix: str
+) -> Dict[str, torch.Tensor] | None:
+    if all(key.startswith(prefix) for key in state_dict.keys()):
+        return {k[len(prefix):]: v for k, v in state_dict.items()}
+    return None
+
+
+def _candidate_state_dict_views(state_dict: Dict[str, torch.Tensor]) -> list[Dict[str, torch.Tensor]]:
+    candidates: list[Dict[str, torch.Tensor]] = [state_dict]
+    seen_signatures = {tuple(state_dict.keys())}
+
+    for prefix in ("module.", "transformer.", "net."):
+        current = list(candidates)
+        for candidate in current:
+            stripped = _strip_prefix_if_present(candidate, prefix)
+            if stripped is None:
+                continue
+            signature = tuple(stripped.keys())
+            if signature not in seen_signatures:
+                seen_signatures.add(signature)
+                candidates.append(stripped)
+    return candidates
 
 
 def _build_jit_kwargs(
@@ -162,14 +188,52 @@ class JiTTransformer2DModel(ModelMixin, ConfigMixin):
         if key not in checkpoint:
             raise ValueError(f"Checkpoint key '{key}' not found. Available keys: {list(checkpoint.keys())}")
 
-        model_state = _extract_module_state_dict(checkpoint[key])
-        model.transformer.load_state_dict(model_state, strict=strict)
+        raw_state = checkpoint[key]
+        if not isinstance(raw_state, dict):
+            raise ValueError(f"Checkpoint key '{key}' must map to a state dict, got: {type(raw_state)}")
+
+        legacy_first_pass = _extract_module_state_dict(raw_state)
+        state_candidates = _candidate_state_dict_views(legacy_first_pass)
+
+        best_state = None
+        best_target = None
+        best_score = None
+
+        wrapper_initial_state = copy.deepcopy(model.state_dict())
+        backbone_initial_state = copy.deepcopy(model.transformer.state_dict())
+
+        for candidate in state_candidates:
+            for target_name, target_module in (("wrapper", model), ("backbone", model.transformer)):
+                if target_name == "wrapper":
+                    model.load_state_dict(wrapper_initial_state, strict=True)
+                else:
+                    model.transformer.load_state_dict(backbone_initial_state, strict=True)
+                load_result = target_module.load_state_dict(candidate, strict=False)
+                score = len(load_result.missing_keys) + len(load_result.unexpected_keys)
+                if best_score is None or score < best_score:
+                    best_score = score
+                    best_state = candidate
+                    best_target = (target_name, target_module)
+
+        if best_state is None or best_target is None:
+            raise RuntimeError("Failed to resolve a compatible state-dict layout for checkpoint loading.")
+
+        selected_name, selected_target = best_target
+        if strict and best_score != 0:
+            raise ValueError(
+                "Strict checkpoint loading failed for all known key layouts. "
+                f"Best attempt targeted {selected_name} with {best_score} key mismatches."
+            )
+
+        model.load_state_dict(wrapper_initial_state, strict=True)
+        selected_target.load_state_dict(best_state, strict=strict)
 
         metadata = {
             "checkpoint_path": checkpoint_path,
             "weights": weights,
             "epoch": checkpoint.get("epoch"),
             "source_args": checkpoint.get("args"),
+            "load_target": selected_name,
         }
         return model, metadata
 

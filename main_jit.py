@@ -15,9 +15,12 @@ from util.crop import center_crop_arr
 import util.misc as misc
 
 import copy
-from engine_jit import train_one_epoch, evaluate
-
-from denoiser import Denoiser
+from jit_diffusers.training import (
+    JiTDiffusersDenoiser,
+    evaluate,
+    remap_training_state_dict_keys,
+    train_one_epoch,
+)
 
 
 def get_args_parser():
@@ -162,8 +165,8 @@ def main(args):
     torch._dynamo.config.cache_size_limit = 128
     torch._dynamo.config.optimize_ddp = False
 
-    # Create denoiser
-    model = Denoiser(args)
+    # Create Diffusers-native denoiser
+    model = JiTDiffusersDenoiser(args)
 
     print("Model =", model)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -191,12 +194,22 @@ def main(args):
     checkpoint_path = os.path.join(args.resume, "checkpoint-last.pth") if args.resume else None
     if checkpoint_path and os.path.exists(checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location='cpu')
-        model_without_ddp.load_state_dict(checkpoint['model'])
+        model_state_dict = remap_training_state_dict_keys(checkpoint['model'])
+        missing_keys, unexpected_keys = model_without_ddp.load_state_dict(model_state_dict, strict=False)
+        if missing_keys or unexpected_keys:
+            print(f"Checkpoint load warnings - missing: {len(missing_keys)}, unexpected: {len(unexpected_keys)}")
 
-        ema_state_dict1 = checkpoint['model_ema1']
-        ema_state_dict2 = checkpoint['model_ema2']
-        model_without_ddp.ema_params1 = [ema_state_dict1[name].cuda() for name, _ in model_without_ddp.named_parameters()]
-        model_without_ddp.ema_params2 = [ema_state_dict2[name].cuda() for name, _ in model_without_ddp.named_parameters()]
+        ema_state_dict1 = remap_training_state_dict_keys(checkpoint['model_ema1'])
+        ema_state_dict2 = remap_training_state_dict_keys(checkpoint['model_ema2'])
+        current_named_params = list(model_without_ddp.named_parameters())
+        model_without_ddp.ema_params1 = [
+            ema_state_dict1.get(name, value.detach().cpu()).to(device)
+            for name, value in current_named_params
+        ]
+        model_without_ddp.ema_params2 = [
+            ema_state_dict2.get(name, value.detach().cpu()).to(device)
+            for name, value in current_named_params
+        ]
         print("Resumed checkpoint from", args.resume)
 
         if 'optimizer' in checkpoint and 'epoch' in checkpoint:

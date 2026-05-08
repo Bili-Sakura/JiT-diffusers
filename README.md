@@ -140,12 +140,17 @@ to evaluate FID and IS against a reference image folder or statistics. You can u
 to prepare the reference image folder, or directly use our pre-computed reference stats
 under ```fid_stats```.
 
-### Diffusers integration and checkpoint conversion
+### Diffusers-native architecture
 
-This repo now includes a self-contained diffusers-style package:
-- model: `JiTTransformer2DModel` (legacy alias: `JiTDiffusersModel`)
-- pipeline: `JiTPipeline`
-- package layout under `jit_diffusers/` (modeling + pipeline modules)
+This repository now follows a Diffusers-first design:
+- model wrapper: `JiTTransformer2DModel` (`ModelMixin` + `ConfigMixin`)
+- pipeline: `JiTPipeline` (`DiffusionPipeline`)
+- scheduler: `JiTScheduler` (`SchedulerMixin`)
+- training stack: `jit_diffusers/training.py` (no legacy `model_jit.py` / `denoiser.py` / `engine_jit.py`)
+
+`main_jit.py` is fully wired to the Diffusers-native model stack above.
+
+### Checkpoint conversion
 
 Convert a JiT training checkpoint to diffusers format:
 ```
@@ -155,7 +160,13 @@ python scripts/convert_jit_to_diffusers.py \
   --weights ema1 \
   --safe_serialization
 ```
-The generated `conversion_metadata.json` stores diffusers-style fields (`model_type`, `sample_size`, `num_class_embeds`, `attention_dropout`, `dropout`) with JiT legacy aliases for compatibility.
+The converted directory follows Diffusers pipeline conventions:
+- `transformer/` (JiT transformer config + weights)
+- `scheduler/` (JiT scheduler config)
+- `model_index.json`
+- `conversion_metadata.json`
+
+`conversion_metadata.json` stores Diffusers-style fields (`model_type`, `sample_size`, `num_class_embeds`, `attention_dropout`, `dropout`) with JiT legacy aliases for compatibility.
 
 Convert a diffusers model back to JiT checkpoint format:
 ```
@@ -165,11 +176,13 @@ python scripts/convert_diffusers_to_jit.py \
   --ema_mode copy_to_both
 ```
 
+`--model_path` accepts either the pipeline root (recommended) or a standalone transformer directory.
+
 Run a single-image test inference from a converted diffusers model (script at repo root):
 ```
 python run_jit_diffusers_inference.py \
-  --model_path /root/worksapce/projects/JiT-diffusers/models/BiliSakura/JiT-diffusers/JiT-B-32 \
-  --output_path /root/worksapce/projects/JiT-diffusers/models/BiliSakura/JiT-diffusers/demo_images/jit_b32_test_inference.png \
+  --model_path /root/workspace/projects/JiT-diffusers/models/BiliSakura/JiT-diffusers/JiT-B-32 \
+  --output_path /root/workspace/projects/JiT-diffusers/models/BiliSakura/JiT-diffusers/demo_images/jit_b32_test_inference.png \
   --class_label 207 \
   --seed 42 \
   --steps 8 \
