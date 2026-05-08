@@ -1,15 +1,58 @@
-## Just image Transformer (JiT) for Pixel-space Diffusion
+# JiT Diffusers Refactor
 
-[![arXiv](https://img.shields.io/badge/arXiv%20paper-2511.13720-b31b1b.svg)](https://arxiv.org/abs/2511.13720)&nbsp;
+This repository is now fully organized around a Diffusers-style package layout, following the same migration pattern used in `Bili-Sakura/NiT-diffusers`.
 
-<p align="center">
-  <img src="demo/visual.jpg" width="100%">
-</p>
+Legacy standalone training/evaluation codepaths have been removed so the tree is focused on reusable Diffusers components and checkpoint conversion.
 
+## Package layout
 
-This is a PyTorch/GPU re-implementation of the paper [Back to Basics: Let Denoising Generative Models Denoise](https://arxiv.org/abs/2511.13720):
+- `src/diffusers/models/transformers/transformer_jit.py`: `JiTTransformer2DModel` (`ModelMixin`/`ConfigMixin`) class-conditional transformer.
+- `src/diffusers/schedulers/scheduling_jit.py`: `JiTScheduler` with Euler/Heun flow-matching updates.
+- `src/diffusers/pipelines/jit/pipeline_jit.py`: `JiTPipeline` with classifier-free guidance and native-resolution latent sampling.
+- `scripts/convert_jit_to_diffusers.py`: converts legacy JiT training checkpoints to Diffusers model directories.
+- `scripts/convert_diffusers_to_jit.py`: converts Diffusers JiT models back to legacy JiT checkpoint format.
+- `scripts/sample_jit.py`: single-image sampling script for converted models.
 
+## Convert a checkpoint
+
+```bash
+python scripts/convert_jit_to_diffusers.py \
+  --checkpoint_path checkpoints/checkpoint-last.pth \
+  --output_dir jit-diffusers \
+  --weights ema1 \
+  --safe_serialization
 ```
+
+The generated `conversion_metadata.json` includes both Diffusers-style fields and JiT legacy aliases for compatibility.
+
+## Convert back to legacy checkpoint
+
+```bash
+python scripts/convert_diffusers_to_jit.py \
+  --model_path jit-diffusers \
+  --output_path checkpoint-converted.pth \
+  --ema_mode copy_to_both
+```
+
+## Sample
+
+```bash
+python scripts/sample_jit.py \
+  --model jit-diffusers \
+  --output demo.png \
+  --class-label 207 \
+  --num-inference-steps 50 \
+  --solver heun
+```
+
+## Notes
+
+- This repository is intended for Diffusers integration and checkpoint conversion workflows.
+- For direct upstreaming, copy files under `src/diffusers` into matching paths in `huggingface/diffusers` and register lazy imports there.
+
+## Citation
+
+```bibtex
 @article{li2025jit,
   title={Back to Basics: Let Denoising Generative Models Denoise},
   author={Li, Tianhong and He, Kaiming},
@@ -17,173 +60,3 @@ This is a PyTorch/GPU re-implementation of the paper [Back to Basics: Let Denois
   year={2025}
 }
 ```
-
-JiT adopts a minimalist and self-contained design for pixel-level high-resolution image diffusion. 
-The original implementation was in JAX+TPU. This re-implementation is in PyTorch+GPU.
-
-<p align="center">
-  <img src="demo/jit.jpg" width="40%">
-</p>
-
-### Dataset
-Download [ImageNet](http://image-net.org/download) dataset, and place it in your `IMAGENET_PATH`.
-
-### Installation
-
-Download the code:
-```
-git clone https://github.com/LTH14/JiT.git
-cd JiT
-```
-
-A suitable [conda](https://conda.io/) environment named `jit` can be created and activated with:
-
-```
-conda env create -f environment.yaml
-conda activate jit
-```
-
-If you get ```undefined symbol: iJIT_NotifyEvent``` when importing ```torch```, simply
-```
-pip uninstall torch
-pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cu124
-```
-Check this [issue](https://github.com/conda/conda/issues/13812#issuecomment-2071445372) for more details.
-
-### Training
-The below training scripts have been tested on 8 H200 GPUs.
-
-Example script for training JiT-B/16 on ImageNet 256x256 for 600 epochs:
-```
-torchrun --nproc_per_node=8 --nnodes=1 --node_rank=0 \
-main_jit.py \
---model JiT-B/16 \
---proj_dropout 0.0 \
---P_mean -0.8 --P_std 0.8 \
---img_size 256 --noise_scale 1.0 \
---batch_size 128 --blr 5e-5 \
---epochs 600 --warmup_epochs 5 \
---gen_bsz 128 --num_images 50000 --cfg 2.9 --interval_min 0.1 --interval_max 1.0 \
---output_dir ${OUTPUT_DIR} --resume ${OUTPUT_DIR} \
---data_path ${IMAGENET_PATH} --online_eval
-```
-
-Example script for training JiT-B/32 on ImageNet 512x512 for 600 epochs:
-```
-torchrun --nproc_per_node=8 --nnodes=1 --node_rank=0 \
-main_jit.py \
---model JiT-B/32 \
---proj_dropout 0.0 \
---P_mean -0.8 --P_std 0.8 \
---img_size 512 --noise_scale 2.0 \
---batch_size 128 --blr 5e-5 \
---epochs 600 --warmup_epochs 5 \
---gen_bsz 128 --num_images 50000 --cfg 2.9 --interval_min 0.1 --interval_max 1.0 \
---output_dir ${OUTPUT_DIR} --resume ${OUTPUT_DIR} \
---data_path ${IMAGENET_PATH} --online_eval
-```
-
-Example script for training JiT-H/16 on ImageNet 256x256 for 600 epochs:
-```
-torchrun --nproc_per_node=8 --nnodes=1 --node_rank=0 \
-main_jit.py \
---model JiT-H/16 \
---proj_dropout 0.2 \
---P_mean -0.8 --P_std 0.8 \
---img_size 256 --noise_scale 1.0 \
---batch_size 128 --blr 5e-5 \
---epochs 600 --warmup_epochs 5 \
---gen_bsz 128 --num_images 50000 --cfg 2.2 --interval_min 0.1 --interval_max 1.0 \
---output_dir ${OUTPUT_DIR} --resume ${OUTPUT_DIR} \
---data_path ${IMAGENET_PATH} --online_eval
-```
-
-### Evaluation
-
-PyTorch pre-trained models are available [here](https://www.dropbox.com/scl/fo/3ken1avtsd81ip67b9qpi/AK218ZNvXKSv74igVvht4PQ?rlkey=14gjrblmljewpl6ygxzlr3njm&st=ffkl77al&dl=0).
-
-Evaluate pre-trained JiT-B:
-```
-torchrun --nproc_per_node=8 --nnodes=1 --node_rank=0 \
-main_jit.py \
---model JiT-B/16 (or JiT-B/32) \
---img_size 256 (or 512) --noise_scale 1.0 (or 2.0) \
---gen_bsz 256 --num_images 50000 --cfg 3.0 --interval_min 0.1 --interval_max 1.0 \
---output_dir ${CKPT_DIR} --resume ${CKPT_DIR} \
---data_path ${IMAGENET_PATH} --evaluate_gen
-```
-
-Evaluate pre-trained JiT-L:
-```
-torchrun --nproc_per_node=8 --nnodes=1 --node_rank=0 \
-main_jit.py \
---model JiT-L/16 (or JiT-L/32) \
---img_size 256 (or 512) --noise_scale 1.0 (or 2.0) \
---gen_bsz 256 --num_images 50000 --cfg 2.4 (or 2.5) --interval_min 0.1 --interval_max 1.0 \
---output_dir ${CKPT_DIR} --resume ${CKPT_DIR} \
---data_path ${IMAGENET_PATH} --evaluate_gen
-```
-
-Evaluate pre-trained JiT-H:
-```
-torchrun --nproc_per_node=8 --nnodes=1 --node_rank=0 \
-main_jit.py \
---model JiT-H/16 (or JiT-H/32) \
---img_size 256 (or 512) --noise_scale 1.0 (or 2.0) \
---gen_bsz 256 --num_images 50000 --cfg 2.2 (or 2.3) --interval_min 0.1 --interval_max 1.0 \
---output_dir ${CKPT_DIR} --resume ${CKPT_DIR} \
---data_path ${IMAGENET_PATH} --evaluate_gen
-```
-
-We use a customized [```torch-fidelity```](https://github.com/LTH14/torch-fidelity)
-to evaluate FID and IS against a reference image folder or statistics. You can use ```prepare_ref.py```
-to prepare the reference image folder, or directly use our pre-computed reference stats
-under ```fid_stats```.
-
-### Diffusers integration and checkpoint conversion
-
-This repo now includes a self-contained diffusers-style package:
-- model: `JiTTransformer2DModel` (legacy alias: `JiTDiffusersModel`)
-- pipeline: `JiTPipeline`
-- package layout under `jit_diffusers/` (modeling + pipeline modules)
-
-Convert a JiT training checkpoint to diffusers format:
-```
-python scripts/convert_jit_to_diffusers.py \
-  --checkpoint_path ${CKPT_DIR}/checkpoint-last.pth \
-  --output_dir ${OUTPUT_DIR}/jit-diffusers \
-  --weights ema1 \
-  --safe_serialization
-```
-The generated `conversion_metadata.json` stores diffusers-style fields (`model_type`, `sample_size`, `num_class_embeds`, `attention_dropout`, `dropout`) with JiT legacy aliases for compatibility.
-
-Convert a diffusers model back to JiT checkpoint format:
-```
-python scripts/convert_diffusers_to_jit.py \
-  --model_path ${OUTPUT_DIR}/jit-diffusers \
-  --output_path ${OUTPUT_DIR}/checkpoint-converted.pth \
-  --ema_mode copy_to_both
-```
-
-Run a single-image test inference from a converted diffusers model (script at repo root):
-```
-python run_jit_diffusers_inference.py \
-  --model_path /root/worksapce/projects/JiT-diffusers/models/BiliSakura/JiT-diffusers/JiT-B-32 \
-  --output_path /root/worksapce/projects/JiT-diffusers/models/BiliSakura/JiT-diffusers/demo_images/jit_b32_test_inference.png \
-  --class_label 207 \
-  --seed 42 \
-  --steps 8 \
-  --cfg 2.9 \
-  --interval_min 0.1 \
-  --interval_max 1.0 \
-  --noise_scale 2.0
-```
-
-### Acknowledgements
-
-We thank Google TPU Research Cloud (TRC) for granting us access to TPUs, and the MIT
-ORCD Seed Fund Grants for supporting GPU resources.
-
-### Contact
-
-If you have any questions, feel free to contact me through email (tianhong@mit.edu). Enjoy!

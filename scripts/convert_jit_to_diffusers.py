@@ -4,10 +4,10 @@ import sys
 from pathlib import Path
 
 try:
-    from jit_diffusers import JiTTransformer2DModel
+    from src.diffusers.models.transformers.transformer_jit import JiTTransformer2DModel
 except ModuleNotFoundError:
     sys.path.append(str(Path(__file__).resolve().parents[1]))
-    from jit_diffusers import JiTTransformer2DModel
+    from src.diffusers.models.transformers.transformer_jit import JiTTransformer2DModel
 
 
 def get_args():

@@ -9,8 +9,8 @@ from diffusers.pipelines.pipeline_utils import ImagePipelineOutput
 from diffusers.utils import BaseOutput
 from diffusers.utils.torch_utils import randn_tensor
 
-from .modeling_jit_transformer_2d import JiTTransformer2DModel
-from .scheduling_jit import JiTScheduler
+from ...models.transformers.transformer_jit import JiTTransformer2DModel
+from ...schedulers.scheduling_jit import JiTScheduler
 
 
 RECOMMENDED_CFG_BY_MODEL = {
@@ -152,7 +152,6 @@ class JiTPipeline(DiffusionPipeline):
                     sample=latents,
                 ).prev_sample
 
-        # Match the original JiT implementation: always use Euler for the final step.
         t, t_next = timesteps[-2], timesteps[-1]
         model_output = forward_cfg(latents, t)
         latents = self.scheduler.euler_step(
