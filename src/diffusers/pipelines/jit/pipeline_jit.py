@@ -46,8 +46,14 @@ class JiTPipeline(DiffusionPipeline):
         transformer_subfolder = model_kwargs.pop("transformer_subfolder", None)
         scheduler_subfolder = model_kwargs.pop("scheduler_subfolder", None)
         scheduler_kwargs = model_kwargs.pop("scheduler_kwargs", {})
+        base_path = Path(pretrained_model_name_or_path)
+        if transformer_subfolder is None and (base_path / "transformer").exists():
+            transformer_subfolder = "transformer"
+        if scheduler_subfolder is None and (base_path / "scheduler").exists():
+            scheduler_subfolder = "scheduler"
+
         if transformer_subfolder is not None:
-            transformer_path = str(Path(pretrained_model_name_or_path) / transformer_subfolder)
+            transformer_path = str(base_path / transformer_subfolder)
         else:
             transformer_path = pretrained_model_name_or_path
         transformer = JiTTransformer2DModel.from_pretrained(transformer_path, **model_kwargs)
