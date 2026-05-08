@@ -3,11 +3,13 @@ import json
 import sys
 from pathlib import Path
 
+import diffusers
+
 try:
-    from jit_diffusers import JiTTransformer2DModel
+    from jit_diffusers import JiTScheduler, JiTTransformer2DModel
 except ModuleNotFoundError:
     sys.path.append(str(Path(__file__).resolve().parents[1]))
-    from jit_diffusers import JiTTransformer2DModel
+    from jit_diffusers import JiTScheduler, JiTTransformer2DModel
 
 
 def get_args():
@@ -50,11 +52,25 @@ def main():
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    transformer_dir = output_dir / "transformer"
+    scheduler_dir = output_dir / "scheduler"
     model.save_pretrained(
-        output_dir,
+        transformer_dir,
         safe_serialization=args.safe_serialization,
         variant=args.variant,
     )
+    scheduler = JiTScheduler()
+    scheduler.save_pretrained(scheduler_dir)
+
+    model_index = {
+        "_class_name": "JiTPipeline",
+        "_diffusers_version": diffusers.__version__,
+        "transformer": ["jit_diffusers", "JiTTransformer2DModel"],
+        "scheduler": ["jit_diffusers", "JiTScheduler"],
+    }
+    with (output_dir / "model_index.json").open("w", encoding="utf-8") as file:
+        json.dump(model_index, file, indent=2, sort_keys=True)
+        file.write("\n")
 
     metadata_path = output_dir / "conversion_metadata.json"
     with metadata_path.open("w", encoding="utf-8") as file:
@@ -68,6 +84,7 @@ def main():
                 "source_checkpoint": metadata["checkpoint_path"],
                 "weights": metadata["weights"],
                 "epoch": metadata["epoch"],
+                "load_target": metadata.get("load_target"),
                 "jit_args": {
                     "model_type": model_type,
                     "sample_size": sample_size,

@@ -23,7 +23,12 @@ RECOMMENDED_NOISE_BY_RESOLUTION = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run single-image JiT diffusers inference.")
-    parser.add_argument("--model_path", type=str, required=True, help="Path to converted diffusers model directory.")
+    parser.add_argument(
+        "--model_path",
+        type=str,
+        required=True,
+        help="Path to a converted Diffusers pipeline directory (or transformer directory).",
+    )
     parser.add_argument("--output_path", type=str, required=True, help="Path to save output PNG image.")
     parser.add_argument("--class_label", type=int, default=207, help="ImageNet class id for conditional generation.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")

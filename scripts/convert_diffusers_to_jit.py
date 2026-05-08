@@ -58,12 +58,13 @@ def _config_first(config, *keys, default=None, required: bool = False):
 def main():
     args = get_args()
 
-    model = JiTTransformer2DModel.from_pretrained(args.model_path)
+    model_path = Path(args.model_path)
+    transformer_path = model_path / "transformer" if (model_path / "transformer").exists() else model_path
+    model = JiTTransformer2DModel.from_pretrained(str(transformer_path))
     checkpoint = model.to_jit_checkpoint(ema_mode=args.ema_mode)
     checkpoint["epoch"] = args.epoch
     checkpoint["optimizer"] = {}
 
-    model_path = Path(args.model_path)
     metadata_path = Path(args.metadata_path) if args.metadata_path else model_path / "conversion_metadata.json"
     metadata_args = None
     if metadata_path.exists():
