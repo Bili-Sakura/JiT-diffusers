@@ -6,12 +6,10 @@ from pathlib import Path
 import torch
 
 try:
-    from src.diffusers.models.transformers.jit_weights import JIT_PRESET_CONFIGS
-    from src.diffusers.models.transformers.transformer_jit import JiTTransformer2DModel
+    from src.diffusers.models.transformers.transformer_jit import JIT_PRESET_CONFIGS, JiTTransformer2DModel
 except ModuleNotFoundError:
     sys.path.append(str(Path(__file__).resolve().parents[1]))
-    from src.diffusers.models.transformers.jit_weights import JIT_PRESET_CONFIGS
-    from src.diffusers.models.transformers.transformer_jit import JiTTransformer2DModel
+    from src.diffusers.models.transformers.transformer_jit import JIT_PRESET_CONFIGS, JiTTransformer2DModel
 
 
 def get_args():

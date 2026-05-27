@@ -28,7 +28,7 @@ from diffusers.utils import check_min_version, is_accelerate_version, is_tensorb
 from diffusers.utils.import_utils import is_xformers_available
 
 from src.diffusers import JiTPipeline, JiTScheduler, JiTTransformer2DModel
-from src.diffusers.models.transformers.jit_weights import JIT_PRESET_CONFIGS
+from src.diffusers.models.transformers.transformer_jit import JIT_PRESET_CONFIGS
 
 
 check_min_version("0.35.0")
