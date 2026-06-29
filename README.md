@@ -7,8 +7,8 @@ It now includes a Diffusers + Accelerate training entrypoint for JiT in addition
 ## Package layout
 
 - `src/diffusers/models/transformers/transformer_jit.py`: `JiTTransformer2DModel` (`ModelMixin`/`ConfigMixin`) class-conditional transformer.
-- `src/diffusers/schedulers/scheduling_jit.py`: `JiTScheduler` with Euler/Heun flow-matching updates.
-- `src/diffusers/pipelines/jit/pipeline_jit.py`: `JiTPipeline` with classifier-free guidance and native-resolution latent sampling.
+- `scheduler/scheduler_config.json`: use built-in `FlowMatchHeunDiscreteScheduler` with `shift=4.0`.
+- `src/diffusers/pipelines/jit/pipeline_jit.py`: `JiTPipeline` with classifier-free guidance and dynamic `height`/`width` inference.
 - `scripts/convert_jit_to_diffusers.py`: converts legacy JiT training checkpoints to Diffusers model directories.
 - `scripts/convert_diffusers_to_jit.py`: converts Diffusers JiT models back to legacy JiT checkpoint format.
 - `scripts/sample_jit.py`: single-image sampling script for converted models.
@@ -55,6 +55,8 @@ accelerate launch examples/unconditional_image_generation/train_jit_unconditiona
   --model_type "JiT-B/16" \
   --output_dir jit-train-out
 ```
+
+You can now run inference at any resolution divisible by the model patch size by passing `height` and `width` to pipeline `__call__`; JiT positional embeddings are interpolated automatically.
 
 ## Notes
 
